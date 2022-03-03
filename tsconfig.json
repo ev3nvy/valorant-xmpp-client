@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+        "outDir": "./built",
+        "allowJs": true,
+        "target": "esnext",
+        "module": "commonjs",
+        "moduleResolution": "node",
+        "declaration": true,
+        "watch": true
+    },
+    "include": ["./src/**/*"],
+    "exclude": ["./built/**/*"]
+}
