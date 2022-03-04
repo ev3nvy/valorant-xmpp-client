@@ -1,8 +1,29 @@
 # Change Log
 All notable changes to this project will be documented in this file.
 
+## [1.0.0-test.2] - 2022-03-04
+
+Small update that fixes major issues.
+
+### Added
+   
+### Changed
+- Static variables/methods have been removed
+    - frankly, they were a waste of time and uncessary
+- Main class now extends the EventEmitter class
+    - no longer required to keep track of an EventEmitter instance
+    - adds intellisense
+
+### Fixed
+- Examples should now work
+- No longer randomly crashes when fetching friends list
+- Fix default interval between emitting presences
+
+<details>
+<summary>[1.0.0-test.1] - 2022-03-04</summary>
+
 ## [1.0.0-test.1] - 2022-03-04
- 
+
 ### Added
 - Authorization is 95% complete
     - reauth is not a thing yet
@@ -34,3 +55,4 @@ All notable changes to this project will be documented in this file.
 Nothing - first release
 ### Fixed
 Nothing - first release
+</details>

@@ -10,19 +10,30 @@ no npm release for this version as it is incomplete and I wouldn't even consider
 
 ## building
 
-Start typescript compilation
-```
-npm run build
+Copy the project
+```console
+$ git clone https://github.com/ev3nvy/valorant-xmpp-client.git
 ```
 
-To make it globally available on your system
+Install dependencies
+```console
+$ npm i
 ```
-npm link
+
+Start typescript compilation
+```console
+$ npm run build
 ```
+
+Make it globally available on your system
+```console
+$ npm link
+```
+---
 
 To use it in another project
-```
-npm link valorant-xmpp-client
+```console
+$ npm link valorant-xmpp-client
 ```
 
 ## examples
@@ -35,34 +46,27 @@ const { Builders, ValorantXmppClient } = require('valorant-xmpp-client');
 
 const { PresenceBuilder, KeystonePresenceBuilder, ValorantPresenceBuilder } = Builders;
 
-(async () => {
-    ValorantXmppClient.once('ready', () => {
-        console.log('ready');
-    });
+const xmppClient = new ValorantXmppClient();
 
-    ValorantXmppClient.on('presence', (data) => {
-        console.log(data);
-    });
+xmppClient.presence = new PresenceBuilder()
+    .addKeystonePresence(new KeystonePresenceBuilder())
+    .addValorantPresence(new ValorantPresenceBuilder());
 
-    ValorantXmppClient.on('error', (error) => {
-        console.log(error);
-    });
+xmppClient.once('ready', () => {
+    console.log('ready');
+});
 
-    try {
-        ValorantXmppClient.presence = new PresenceBuilder()
-            .addKeystonePresence(new KeystonePresenceBuilder())
-            .addValorantPresence(new ValorantPresenceBuilder());
-        
-        // await ValorantXmppClient.login({ username: '', password: '' });
-        // await ValorantXmppClient.login({ accessToken: '' });
-        await ValorantXmppClient.login({ ssidCookie: '' });
+xmppClient.on('presence', (data) => {
+    console.log(data);
+});
 
-        const friends = await ValorantXmppClient.fetchFriends();
-        console.log(friends);
-    } catch (err) {
-        console.log(err)
-    }
-})();
+xmppClient.on('error', (error) => {
+    console.log(error);
+});
+
+// xmppClient.login({ username: '', password: '' });
+// xmppClient.login({ accessToken: '' });
+xmppClient.login({ ssidCookie: '' });
 ```
 </details>
 
@@ -74,40 +78,41 @@ import { Builders, ValorantXmppClient } from 'valorant-xmpp-client';
 
 const { PresenceBuilder, KeystonePresenceBuilder, ValorantPresenceBuilder } = Builders;
 
-(async () => {
-    ValorantXmppClient.once('ready', () => {
-        console.log('ready');
-    });
+const xmppClient = new ValorantXmppClient();
 
-    ValorantXmppClient.on('presence', (data) => {
-        console.log(data);
-    });
+xmppClient.presence = new PresenceBuilder()
+    .addKeystonePresence(new KeystonePresenceBuilder())
+    .addValorantPresence(new ValorantPresenceBuilder());
 
-    ValorantXmppClient.on('error', (error) => {
-        console.log(error);
-    });
+xmppClient.once('ready', () => {
+    console.log('ready');
+});
 
-    try {
-        ValorantXmppClient.presence = new PresenceBuilder()
-            .addKeystonePresence(new KeystonePresenceBuilder())
-            .addValorantPresence(new ValorantPresenceBuilder());
-        
-        // await ValorantXmppClient.login({ username: '', password: '' });
-        // await ValorantXmppClient.login({ accessToken: '' });
-        await ValorantXmppClient.login({ ssidCookie: '' });
+xmppClient.on('presence', (data) => {
+    console.log(data);
+});
 
-        const friends = await ValorantXmppClient.fetchFriends();
-        console.log(friends);
-    } catch (err) {
-        console.log(err)
-    }
-})();
+xmppClient.on('error', (error) => {
+    console.log(error);
+});
+
+// xmppClient.login({ username: '', password: '' });
+// xmppClient.login({ accessToken: '' });
+xmppClient.login({ ssidCookie: '' });
 ```
 </details>
 
 ## Contributing
 
 open an issue or a pull request, you can also dm me at ev3nvy#9996 on Discord
+
+## Acknowledgements
+
+[narkdev](https://github.com/narkdev) for the initial [implementation in C#](https://github.com/narkdev/ValorantSharp)
+
+[giorgi-o](https://github.com/giorgi-o) for the [amazing documentation](https://github.com/giorgi-o/CrossPlatformPlaying/wiki/Riot-Games)
+
+...and other amazing people at https://discord.gg/a9yzrw3KAm
 
 ## Legal
 

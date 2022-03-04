@@ -7,59 +7,24 @@ import { clientName, fetchFriends, mechanism, rxep, setupSession, xmlDeclaration
 import { formatPresence, PresenceOutput } from "./presence/presence";
 import { Jid, parseJid } from "../helpers/parsers";
 import { PresenceBuilder, KeystonePresenceBuilder } from "../builders/builders";
-import { formatRoster } from "./friends/friends";
+import { formatRoster, RosterOutput } from "./friends/friends";
 
 const defaultConfig: ValorantXmppConfig = {
     autoReconnect: true,
     maxReconnectAttempts: 5,
     reconnectAttemptsTimeframe: 15000,
-    // updatePresenceInterval: 120000
-    updatePresenceInterval: 10000
+    updatePresenceInterval: 120000
 }
 
 const buildConfig = (options: ValorantXmppConfig) => new Object({ ...defaultConfig, ...options });
 
-export class ValorantXmppClient {
-    static _instance: ValorantXmppClient;
-
-
-    static get instance() {
-        if(typeof this._instance === 'undefined')
-            this._instance = new ValorantXmppClient();
-        return this._instance;
-    }
-    static set instance(instance) {
-        this._instance = instance;
-    }
-
-    static get friends() {
-        return this.instance.friends;
-    }
-    static set friends(friends) {
-        this.instance.friends = friends;
-    }
-
-    static get presence() {
-        return this.instance.presence;
-    }
-    static set presence(presence) {
-        this.instance.presence = presence;
-    }
-
-    static get tokenStorage() {
-        return this.instance.tokenStorage;
-    }
-    static set tokenStorage(tokenStorage) {
-        this.instance.tokenStorage = tokenStorage;
-    }
-
+export class ValorantXmppClient extends EventEmitter {
     _reconnects: Array<number>;
 
     _authInstance: ValorantAuth;
     _xmppInstance: XmppClient;
     
     _config: ValorantXmppConfig;
-    _eventEmitter: EventEmitter;
 
     _presence: PresenceBuilder;
 
@@ -95,8 +60,9 @@ export class ValorantXmppClient {
     }
 
     constructor(config?: ValorantXmppConfig) {
+        super();
         this._config = buildConfig(config);
-        this._eventEmitter = new EventEmitter();
+        // this._eventEmitter = new EventEmitter();
         this.self = new Account();
         this._reconnects = new Array();
     }
@@ -120,28 +86,34 @@ export class ValorantXmppClient {
                         case "presence":
                             if(Array.isArray(data)) {
                                 for(const presence of data)
-                                    this._eventEmitter.emit('presence', formatPresence(presence));
+                                    this.emit('presence', formatPresence(presence));
                                 break;
                             }
         
-                            this._eventEmitter.emit('presence', formatPresence(data));
+                            this.emit('presence', formatPresence(data));
                             break;
                         case "message":
-                            this._eventEmitter.emit('message', data);
+                            this.emit('message', data);
                             break;
                         case "iq":
-                            const roster = formatRoster(data);
-                            this._eventEmitter.emit('roster', roster);
-
-                            if(roster.type === 'result')
-                                this.friends = roster.roster;
-                            else if (roster.type === 'set') {
-                                if(typeof this.friends === 'undefined')
-                                    throw new Error('friends list is undefined, did you forget to await somewhere?');
-                                // if(this.friends === null)
-                                    
+                            if(Array.isArray(data)) {
+                                for(const roster of data)
+                                    this.emit('roster', formatRoster(roster));
+                                break;
                             }
-                            else throw new Error('unknown type');
+
+                            const roster = formatRoster(data);
+                            this.emit('roster', roster);
+
+                            // if(roster.type === 'result')
+                            //     this.friends = roster.roster;
+                            // else if (roster.type === 'set') {
+                            //     if(typeof this.friends === 'undefined')
+                            //         throw new Error('friends list is undefined, did you forget to await somewhere?');
+                            //     // if(this.friends === null)
+                                    
+                            // }
+                            // else throw new Error('unknown type');
                             break;
                     }
                 }
@@ -154,14 +126,14 @@ export class ValorantXmppClient {
             this._xmppInstance.destroy();
 
             if(this.reconnects.length > this._config.maxReconnectAttempts)
-                return this._eventEmitter.emit('error',
+                return this.emit('error',
                     new Error('There have been too many reconnects within specified timeframe.'));
             
             // if we have auto reconnect enabled and the connection was closed try reconnecting
             if(((err.type === 'error' && err.error.code === 'EPIPE') || err.type === 'close')
                 && this._config?.autoReconnect) return await this.login();
 
-            this._eventEmitter.emit('error', err);
+            this.emit('error', err);
         }
     }
 
@@ -216,34 +188,38 @@ export class ValorantXmppClient {
 
         await this._xmppInstance.sendXml(fetchFriends());
         
-        this._eventEmitter.emit('ready');
+        this.emit('ready');
         this._mainLoop();
     }
 
-    static async login(options?: PasswordAuth | TokenAuth | CookieAuth, config?: ValorantXmppConfig) {
-        this.instance = new ValorantXmppClient(config);
-        this.instance._config = config;
-        await this.instance.login(options);
-    }
-
-    on = (name: string | symbol, listener: (...args: any[]) => void) => this._eventEmitter.on(name, listener);
-
-    static on = (name: string | symbol, listener: (...args: any[]) => void) => this.instance.on(name, listener);
-
-    once = (name: string | symbol, listener: (...args: any[]) => void) => this._eventEmitter.once(name, listener);
-    
-    static once = (name: string | symbol, listener: (...args: any[]) => void) => this.instance.once(name, listener);
-
     sendPresence = () => this._xmppInstance.send(XmppClient.buildXml(this.presence._toXmlObject()))
-
-    static sendPresence = () => this.instance.sendPresence();
 
     fetchFriends = async () => {
         await this._xmppInstance.sendXml(fetchFriends());
         return this.friends;
     };
+}
 
-    static fetchFriends = () => this._instance.fetchFriends();
+interface ValorantXmppClientEvents {
+    'ready': () => void;
+    'presence': (presence: PresenceOutput) => void;
+    'message': (message: any) => void;
+    'roster': (roster: RosterOutput) => void;
+    'error': (error: Error) => void;
+}
+
+export declare interface ValorantXmppClient {
+    on<U extends keyof ValorantXmppClientEvents>(
+        event: U, listener: ValorantXmppClientEvents[U]
+    ): this;
+
+    once<U extends keyof ValorantXmppClientEvents>(
+        event: U, listener: ValorantXmppClientEvents[U]
+    ): this;
+  
+    emit<U extends keyof ValorantXmppClientEvents>(
+        event: U, ...args: Parameters<ValorantXmppClientEvents[U]>
+    ): boolean;
 }
 
 export interface JidObject extends Jid {
