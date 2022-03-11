@@ -1,6 +1,44 @@
 # Change Log
 All notable changes to this project will be documented in this file.
 
+## [1.0.0-test.3] - 2022-03-11
+
+Fixed a couple of crashes + added reauth.
+
+Thank you to [AMr#8746](https://discord.com/users/299899582211555329) on discord for reporting most of these crashes.
+
+### Added
+- Authorization
+    - added reauth
+    - added a destroy method
+- XMPP client
+    - added an end method for gracefully shutting down a connection
+- Valorant XMPP Client
+    - added an end method for gracefully closing a connection
+
+### Changed
+- Authorization
+    - shuffled things around
+    - token storage is no longer a class but an object
+- Valorant XMPP Client
+    - account and friends are no longer an instance of a class but an object instead
+    - self has been changed to account
+    - asynchronous getXmppInstance() method
+- Misc
+    - fetchXmppRegion() has been renamed to fetchPas() because that makes more sense
+    and should have been called that since the beginning
+### Fixed
+- Valorant XMPP Client
+    - asynchronous getXmppInstance() method should fix `Cannot read property 'sendXml' of undefined`
+    and `Cannot read property 'send' of undefined`
+    - should now also reconnect on `ECONNRESET` error
+- Misc
+    - parsers/formatters now have extra checks for undefined variables which should
+    fix [#1](https://github.com/ev3nvy/valorant-xmpp-client/issues/1)
+
+<details>
+<summary>[1.0.0-test.2] - 2022-03-04</summary>
+
 ## [1.0.0-test.2] - 2022-03-04
 
 Small update that fixes major issues.
@@ -18,6 +56,7 @@ Small update that fixes major issues.
 - Examples should now work
 - No longer randomly crashes when fetching friends list
 - Fix default interval between emitting presences
+</details>
 
 <details>
 <summary>[1.0.0-test.1] - 2022-03-04</summary>

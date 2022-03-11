@@ -10,7 +10,7 @@ export const parseJid = (jid: string): Jid => {
 }
 
 // inefficient but makes the code look cleaner as I don't have to manually
-// parse every date element (arguments need to be string)
+// parse every date element (arguments "need" to be string)
 export const parseLastOnline = (dateString: string): Date => {
     const [ date, time ] = dateString.trim().split(/\ +/g);
     const [ year, month, day ] = date.trim().split('-').map(element => parseInt(element));

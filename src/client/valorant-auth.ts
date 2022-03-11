@@ -30,95 +30,11 @@ const defaultOptions: ValorantAuthConfig = {
         response_type: "token id_token",
         response_mode: "query",
         scope: "account openid"
-    }
+    },
+    automaticReauth: true
 }
 
 const buildOptions = (options: ValorantAuthConfig) => new Object({ ...defaultOptions, ...options });
-
-const initWithUsernamePassword = async (tokenStorage: TokenStorage, { username, password }: PasswordAuth, config: ValorantAuthConfig) => {
-    // initial request required for creating a session
-    const session = await Authorization.createSession(config.sessionAuthBody, undefined, config.axiosConfig);
-    let asidCookie = session.headers['set-cookie'].find((cookie: string) => /^asid/.test(cookie));
-    // attempt to exchange username and password for an access token
-    const login = (await Authorization.login(asidCookie, username, password));
-
-    // auth failed - most likely incorrect login info
-    if(typeof login.data.error !== 'undefined') {
-        if(login.data.error === 'auth_failure')
-            throw new InvalidCredentials(login);
-        throw new AuthFailure(login);
-    }
-
-    asidCookie = login.headers['set-cookie'].find((cookie: string) => /^asid/.test(cookie));
-    
-    // check if 2fa is enabled and ask for code
-    const response = login.data.type === 'multifactor'
-        ? (await Authorization.send2faCode(asidCookie, await config.custom2faLogic(login.data)))
-        : login;
-    
-    // auth failed - most likely invalid code
-    if(typeof response.data.error !== 'undefined') {
-        if(response.data.error === 'auth_failure')
-            throw new Invalid2faCode(response);
-        throw new AuthFailure(response);
-    }
-
-    // extract ssid cookie
-    tokenStorage.ssidCookie = response.headers['set-cookie'].find((cookie: string) => /^ssid/.test(cookie));
-
-    // extract tokens from the url
-    const loginResponseURI = new URL(response.data.response.parameters.uri);
-    tokenStorage.accessToken = loginResponseURI.searchParams.get('access_token');
-
-    return await initWithAccessToken(tokenStorage, {
-        accessToken: tokenStorage.accessToken
-    }, config);
-}
-
-const initWithAccessToken = async (tokenStorage: TokenStorage, { accessToken, pasToken, entitlementsToken }: TokenAuth, config: ValorantAuthConfig) => {
-    tokenStorage.pasToken = typeof pasToken === 'undefined'
-        ? (await Authorization.fetchXmppRegion(accessToken)).data
-        : pasToken;
-
-    tokenStorage.entitlementsToken = typeof entitlementsToken === 'undefined'
-        ? (await Authorization.fetchEntitlements(accessToken)).data.entitlements_token
-        : entitlementsToken;
-
-    // decode the pas token
-    const decodedJwt = JSON.parse(Buffer.from(tokenStorage.pasToken.split('.')[1], 'base64').toString());
-    // get puuid
-    tokenStorage.puuid = decodedJwt.sub;
-
-    // try automatically determening the region 
-    if(typeof config.region === 'undefined') {
-        // find region
-        for(const region in XmppRegions) {
-            if(XmppRegions[region].lookupName === decodedJwt.affinity) {
-                tokenStorage.region = XmppRegions[region];
-                break;
-            }
-        }
-        if(typeof tokenStorage.region == 'undefined')
-            throw new InvalidRegion(decodedJwt);
-    }
-    else
-        tokenStorage.region = config.region;
-    
-    return tokenStorage;
-}
-
-const initWithCookie = async (tokenStorage: TokenStorage, { ssidCookie }: CookieAuth, config: ValorantAuthConfig) => {
-    const session = await Authorization.createSession(config.sessionAuthBody, { Cookie: ssidCookie }, config.axiosConfig);
-    
-    tokenStorage.ssidCookie = session.headers['set-cookie'].find((cookie: string) => /^ssid/.test(cookie));
-    
-    const loginResponseURI = new URL(session.data.response.parameters.uri);
-    tokenStorage.accessToken = loginResponseURI.searchParams.get('access_token');
-
-    return await initWithAccessToken(tokenStorage, {
-        accessToken: tokenStorage.accessToken
-    }, config);
-}
 
 const isPasswordAuth = (options: PasswordAuth | TokenAuth | CookieAuth): options is PasswordAuth =>
     (options as PasswordAuth).username !== undefined && (options as PasswordAuth).password !== undefined;
@@ -133,55 +49,158 @@ export class ValorantAuth {
     _xmppClientInstance: ValorantXmppClient;
     _config: ValorantAuthConfig;
 
+    _reauthInterval: NodeJS.Timer; 
+
     get tokenStorage() {
-        return this._xmppClientInstance.self.tokenStorage;
+        return this._xmppClientInstance.tokenStorage;
     }
 
     set tokenStorage(tokenStorage) {
-        this._xmppClientInstance.self.tokenStorage = tokenStorage;
+        this._xmppClientInstance.tokenStorage = {
+            ...this.tokenStorage,
+            ...tokenStorage
+        };
     }
 
-    constructor(player: ValorantXmppClient, config?: ValorantAuthConfig) {
-        this._xmppClientInstance = player;
+    constructor(client: ValorantXmppClient, config?: ValorantAuthConfig) {
+        this._xmppClientInstance = client;
         this._config = buildOptions(config);
         return this;
     }
 
-    async login(options: PasswordAuth | TokenAuth | CookieAuth) {
-        if(typeof this.tokenStorage !== 'undefined' && this.tokenStorage instanceof TokenStorage) {
-            return this;
+    _initWithUsernamePassword = async ({ username, password }: PasswordAuth) => {
+        // initial request required for creating a session
+        const session = await Authorization.createSession(this._config.sessionAuthBody, undefined, this._config.axiosConfig);
+        let asidCookie = session.headers['set-cookie'].find((cookie: string) => /^asid/.test(cookie));
+        // attempt to exchange username and password for an access token
+        const login = (await Authorization.login(asidCookie, username, password));
+    
+        // auth failed - most likely incorrect login info
+        if(typeof login.data.error !== 'undefined') {
+            if(login.data.error === 'auth_failure')
+                throw new InvalidCredentials(login);
+            throw new AuthFailure(login);
         }
+    
+        asidCookie = login.headers['set-cookie'].find((cookie: string) => /^asid/.test(cookie));
         
-        if(isCookieAuth(options))
-            this.tokenStorage = await initWithCookie(new TokenStorage(), options, this._config);
-        else if(isPasswordAuth(options))
-            this.tokenStorage = await initWithUsernamePassword(new TokenStorage(), options, this._config);
-        else if(isTokenAuth(options))
-            this.tokenStorage = await initWithAccessToken(new TokenStorage(), options, this._config);
+        // check if 2fa is enabled and ask for code
+        const response = login.data.type === 'multifactor'
+            ? (await Authorization.send2faCode(asidCookie, await this._config.custom2faLogic(login.data)))
+            : login;
+        
+        // auth failed - most likely invalid code
+        if(typeof response.data.error !== 'undefined') {
+            if(response.data.error === 'auth_failure')
+                throw new Invalid2faCode(response);
+            throw new AuthFailure(response);
+        }
+    
+        // extract ssid cookie
+        this.tokenStorage = {
+            ssidCookie: response.headers['set-cookie'].find((cookie: string) => /^ssid/.test(cookie))
+        };
+    
+        // extract tokens from the url
+        const loginResponseURI = new URL(response.data.response.parameters.uri);
+        const accessToken = loginResponseURI.searchParams.get('access_token');
+    
+        return await this._initWithAccessToken({ accessToken });
+    }
+    
+    _initWithAccessToken = async ({ accessToken, pasToken, entitlementsToken }: TokenAuth) => {
+        this.tokenStorage = {
+            accessToken,
+            pasToken: typeof pasToken === 'undefined'
+                ? (await Authorization.fetchPas(accessToken)).data
+                : pasToken,
+            entitlementsToken: typeof entitlementsToken === 'undefined'
+                ? (await Authorization.fetchEntitlements(accessToken)).data.entitlements_token
+                : entitlementsToken
+        };
+    
+        // decode the pas token
+        const decodedJwt = JSON.parse(
+            Buffer.from(this.tokenStorage.pasToken.split('.')[1], 'base64').toString());
+        // get puuid
+        this.tokenStorage = { puuid: decodedJwt.sub };
+    
+        // try automatically determening the region 
+        if(typeof this._config.region === 'undefined') {
+            // find region
+            for(const region in XmppRegions) {
+                if(XmppRegions[region].lookupName === decodedJwt.affinity) {
+                    this.tokenStorage = { region: XmppRegions[region] };
+                    break;
+                }
+            }
+            if(typeof this.tokenStorage.region == 'undefined')
+                throw new InvalidRegion(decodedJwt);
+        }
         else
-            throw new MissingArguments(options);
+            this.tokenStorage = { region: this._config.region };
+    }
+    
+    _initWithCookie = async ({ ssidCookie }: CookieAuth) => {
+        const session = await Authorization.createSession(this._config.sessionAuthBody,
+            { Cookie: ssidCookie }, this._config.axiosConfig);
+        
+        this.tokenStorage = {
+            ssidCookie: session.headers['set-cookie'].find((cookie: string) => /^ssid/.test(cookie))
+        };
+
+        const loginResponseURI = new URL(session.data.response.parameters.uri);
+        const accessToken = loginResponseURI.searchParams.get('access_token')
+        
+        return await this._initWithAccessToken({ accessToken });
+    }
+
+    _reauth = async () => {
+        const session = await Authorization.createSession(this._config.sessionAuthBody, 
+            { Cookie: this.tokenStorage.ssidCookie }, this._config.axiosConfig);
+
+        const loginResponseURI = new URL(session.data.response.parameters.uri);
+        const accessToken = loginResponseURI.searchParams.get('access_token');
+
+
+        this.tokenStorage = {
+            accessToken,
+            ssidCookie: session.headers['set-cookie'].find((cookie: string) => /^ssid/.test(cookie)),
+            pasToken: (await Authorization.fetchPas(accessToken)).data
+        };
+    }
+
+    async login(options?: PasswordAuth | TokenAuth | CookieAuth) {
+        if(typeof options !== 'undefined') {
+            if(isCookieAuth(options))
+                await this._initWithCookie(options);
+            else if(isPasswordAuth(options))
+                await this._initWithUsernamePassword(options);
+            else if(isTokenAuth(options))
+                await this._initWithAccessToken(options);
+            else
+                throw new MissingArguments(options);
+        }
+
+        if(this._config.automaticReauth)
+            this._reauthInterval = setInterval(async () =>
+                await this._reauth(), (3600 - 300) * 1000);
 
         return this;
     }
+
+    destroy() {
+        clearInterval(this._reauthInterval);
+    }
 }
 
-export class TokenStorage {
-    accessToken: string;
-    pasToken: string;
-    entitlementsToken: string;
-    puuid: string;
-    region: XmppRegionObject;
-    clientVersion: string;
-    ssidCookie: string;
-
-    constructor() {
-        this.accessToken = null;
-        this.pasToken = null;
-        this.entitlementsToken = null;
-        this.puuid = null;
-        this.region = null;
-        this.clientVersion = null;
-    }
+export interface TokenStorage {
+    accessToken?: string;
+    pasToken?: string;
+    entitlementsToken?: string;
+    puuid?: string;
+    region?: XmppRegionObject;
+    ssidCookie?: string;
 }
 
 export interface ValorantAuthConfig {

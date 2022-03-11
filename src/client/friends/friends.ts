@@ -1,18 +1,17 @@
 import { Friend, JidObject } from "../valorant-xmpp";
 import { parseJid } from "../../helpers/parsers";
 
-const formatRosterInfo = ({ id, lol, jid, name, subscription, puuid }) => 
-    new Friend().from({
-        jid: { jid, ...parseJid(jid) },
-        puuid: puuid,
-        name: typeof id === 'undefined' ? null : id.name || null,
-        tagline: typeof id === 'undefined' ? null : id.tagline || null,
-        lolName: typeof lol === 'undefined' ? null : lol.name || null,
-        preferredName: typeof name === 'undefined' ? null : name,
-        isFriend: subscription === 'both',
-        isIncoming: subscription === 'pending_in',
-        isOutgoing: subscription === 'pending_out'
-    });
+const formatRosterInfo = ({ id, lol, jid, name, subscription, puuid }): Friend => new Object({
+    jid: { jid, ...parseJid(jid) },
+    puuid: puuid,
+    name: typeof id === 'undefined' ? null : id.name || null,
+    tagline: typeof id === 'undefined' ? null : id.tagline || null,
+    lolName: typeof lol === 'undefined' ? null : lol.name || null,
+    preferredName: typeof name === 'undefined' ? null : name,
+    isFriend: subscription === 'both',
+    isIncoming: subscription === 'pending_in',
+    isOutgoing: subscription === 'pending_out'
+});
 
 const parseRosterInfo = (friends: any) => Array.isArray(friends)
     ? friends.map(friend => formatRosterInfo(friend))
@@ -23,13 +22,13 @@ export const formatRoster = (presence: RosterInput) => {
 
     const rosterObj: RosterOutput = {
         // sender jid
-        sender: { jid: from, ...parseJid(from) },
+        sender: typeof from === 'undefined' ? null : { jid: from, ...parseJid(from) },
         // recipient jid 
-        recipient: { jid: to, ...parseJid(to) },
+        recipient: typeof to === 'undefined' ? null : { jid: to, ...parseJid(to) },
         // 
         roster: typeof query.item === 'undefined' ? null : parseRosterInfo(query.item),
-        // result when fetching friends list
-        // set when changing it (e.g. sending friend request) 
+        // result - when fetching friends list
+        // set - when changing it (e.g. sending friend request) 
         type: type || null,
         // event id
         id: id || null
@@ -51,10 +50,10 @@ export const formatRoster = (presence: RosterInput) => {
 }
 
 export interface RosterInput {
-    from: string
-    to: string
-    type: ('result' | 'set') | (string & {})
-    query: any
+    from?: string
+    to?: string
+    type?: ('result' | 'set') | (string & {})
+    query?: any
     id?: string
     [propName: string]: any
 }

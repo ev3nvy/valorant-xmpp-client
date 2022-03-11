@@ -1,11 +1,12 @@
 {
   "name": "valorant-xmpp-client",
-  "version": "1.0.0-test.2",
+  "version": "1.0.0-test.3",
   "description": "",
   "main": "built/index.js",
   "types": "built/index.d.ts",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "test": "tsc -w"
   },
   "author": "ev3nvy",
   "license": "MIT",

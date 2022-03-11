@@ -23,9 +23,9 @@ export const formatPresence = (presence: PresenceInput) => {
 
     const presenceObj: PresenceOutput = {
         // sender jid
-        sender: { jid: from, ...parseJid(from) },
+        sender: typeof from === 'undefined' ? null : { jid: from, ...parseJid(from) },
         // recipient jid 
-        recipient: { jid: to, ...parseJid(to) },
+        recipient: typeof to === 'undefined' ? null : { jid: to, ...parseJid(to) },
         // online status
         status: show || null,
         // status message
@@ -58,8 +58,8 @@ export const formatPresence = (presence: PresenceInput) => {
 }
 
 export interface PresenceInput {
-    from: string
-    to: string
+    from?: string
+    to?: string
     show?: string
     type?: string
     games?: any

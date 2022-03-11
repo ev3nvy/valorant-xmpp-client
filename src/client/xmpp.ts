@@ -149,6 +149,11 @@ export class XmppClient {
         this._socket.removeAllListeners();
     }
 
+    end = () => {
+        this._socket.end();
+        this._socket.removeAllListeners();
+    }
+
     static buildXml = (data: any) => xmlBuilder.build(data);
 
     static parseXml = (data: any) => xmlParser.parse(data);

@@ -76,7 +76,7 @@ export class Authorization {
         .setBody({})
         .send();
 
-    static fetchXmppRegion = (accessToken: string) => new GenericRequest()
+    static fetchPas = (accessToken: string) => new GenericRequest()
         .setUrl(Endpoints.Pas() + '/pas/v1/service/chat')
         .setMethod('GET')
         .setHeaders({
